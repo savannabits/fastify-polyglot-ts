@@ -3,7 +3,17 @@ import { Dirent, readdirSync } from 'fs';
 import fp from 'fastify-plugin';
 import Polyglot from 'node-polyglot';
 import { ERR_MISSING_DICTIONARY_FOR_DEFAULT_LOCALE } from './errors';
-import { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import {
+  FastifyInstance,
+  FastifyPluginAsync,
+  FastifyPluginOptions,
+} from 'fastify';
+
+export interface MyPluginOptions extends FastifyPluginOptions {
+  defaultLocale: string;
+  localesPath?: string;
+  locales?: Record<string, any>;
+}
 
 export declare class FastifyPolyglot extends Polyglot {
   locales?: Record<string, any>;
@@ -18,12 +28,11 @@ declare module 'fastify' {
 
 const ACCEPTED_EXTENSIONS = ['.js', '.ts', '.json'];
 
-export default fp(
-  (
-    fastify: FastifyInstance,
-    opts: FastifyPluginOptions,
-    next: (error?: Error | undefined) => void
-  ) => {
+const plugin: FastifyPluginAsync<MyPluginOptions> = async (
+  fastify: FastifyInstance,
+  opts: MyPluginOptions
+) => {
+  try {
     const getLocales = (basepath: string) => {
       let contents: Array<Dirent> = [];
       try {
@@ -61,7 +70,7 @@ export default fp(
     const locales = mergeLocales(opts.locales, loadedLocales);
 
     if (Object.keys(locales).indexOf(defaultLocale) === -1) {
-      next(new Error(ERR_MISSING_DICTIONARY_FOR_DEFAULT_LOCALE));
+      throw new Error(ERR_MISSING_DICTIONARY_FOR_DEFAULT_LOCALE);
     }
 
     const i18n: FastifyPolyglot = new Polyglot({
@@ -73,6 +82,8 @@ export default fp(
     i18n.defaultLocale = defaultLocale;
 
     fastify.decorate('i18n', i18n);
-    next();
+  } catch (error: any) {
+    fastify.log.error(error);
   }
-);
+};
+export default fp(plugin);
